@@ -1625,7 +1625,7 @@ def load_real_json_analyses():
         try:
             with open(filename, 'r', encoding='utf-8') as f:
                 analyses[key] = json.load(f)
-            st.success(f"Successfully loaded {filename}")
+            #st.success(f"Successfully loaded {filename}")
         except Exception as e:
             st.error(f"Error loading {filename}: {str(e)}")
             # Fallback to empty list if file can't be loaded
