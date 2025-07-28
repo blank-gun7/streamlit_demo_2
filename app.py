@@ -2695,19 +2695,8 @@ def investee_dashboard(db):
                     st.write(f"File can be read. Sample columns: {list(test_df.columns)}")
                 except Exception as read_error:
                     st.error(f"Cannot read Excel file: {str(read_error)}")
-    
-    # Display current data
-    st.subheader("Current Data Overview")
-    company_data = db.get_company_data(company_id)
-    
-    if company_data:
-        for data_type, data in company_data.items():
-            with st.expander(f"{data_type.replace('_', ' ').title()} Data"):
-                if isinstance(data, list) and len(data) > 0:
-                    st.write(f"Records: {len(data)}")
-                    st.dataframe(pd.DataFrame(data).head())
-                else:
-                    st.json(data)
+        
+        
     else:
         st.info("No data uploaded yet. Please upload your Excel files above.")
 
