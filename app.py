@@ -11,6 +11,524 @@ import time
 from openai import OpenAI
 import os
 
+# Display function for chatbot
+def display_chatbot(data, view_title):
+    """Display chatbot interface for data analysis"""
+    st.subheader("AI Data Analyst")
+    st.markdown("Ask questions about the data, trends, insights, or get analysis recommendations.")
+    
+    # Initialize chatbot if not exists
+    if f"chatbot_{view_title}" not in st.session_state:
+        st.session_state[f"chatbot_{view_title}"] = OpenAIChatbot()
+    
+    # Initialize chat history
+    chat_key = f"chat_history_{view_title}"
+    if chat_key not in st.session_state:
+        st.session_state[chat_key] = []
+    
+    # Suggestion buttons
+    suggestions = [
+        "What are the key insights from this data?",
+        "Show me the top performers",
+        "What trends do you see?",
+        "Any concerning patterns?",
+        "Recommend next steps"
+    ]
+    
+    st.markdown("**Quick Questions:**")
+    cols = st.columns(len(suggestions))
+    for i, suggestion in enumerate(suggestions):
+        with cols[i]:
+            if st.button(suggestion[:15] + "...", key=f"suggest_{view_title}_{i}"):
+                st.session_state[f"pending_question_{chat_key}"] = suggestion
+                st.rerun()
+    
+    # Chat input
+    user_question = st.chat_input(f"Ask about your {view_title} data...", key=f"chat_input_{view_title}")
+    
+    # Check for pending question from buttons
+    pending_key = f"pending_question_{chat_key}"
+    if pending_key in st.session_state:
+        user_question = st.session_state[pending_key]
+        del st.session_state[pending_key]
+    
+    # Process user question
+    if user_question:
+        # Add user message to chat history
+        st.session_state[chat_key].append({"role": "user", "content": user_question})
+        
+        # Generate AI response
+        try:
+            with st.spinner("Analyzing your data..."):
+                response = st.session_state[f"chatbot_{view_title}"].get_response(
+                    user_question, view_title.lower(), data, ""
+                )
+                
+                # Add AI response to chat history
+                st.session_state[chat_key].append({"role": "assistant", "content": response})
+                
+        except Exception as e:
+            error_msg = f"Error: {str(e)}"
+            st.session_state[chat_key].append({"role": "assistant", "content": error_msg})
+    
+    # Display chat history
+    if st.session_state[chat_key]:
+        st.markdown("###  Chat History")
+        for i, message in enumerate(reversed(st.session_state[chat_key][-10:])):  # Show last 10 messages
+            if message["role"] == "user":
+                st.markdown(f"**You:** {message['content']}")
+            else:
+                st.markdown(f"**AI:** {message['content']}")
+            st.markdown("---")
+
+def display_quarterly_analysis(df, data, view_title):
+    st.header(" Quarterly Revenue & QoQ Growth Analysis")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Key Metrics")
+        total_q3 = df['Quarter 3 Revenue'].sum()
+        total_q4 = df['Quarter 4 Revenue'].sum()
+        total_variance = df['Variance'].sum()
+        
+        st.metric("Total Q3 Revenue", f"${total_q3:,.2f}")
+        st.metric("Total Q4 Revenue", f"${total_q4:,.2f}")
+        st.metric("Total Variance", f"${total_variance:,.2f}")
+    
+    with col2:
+        # Top performers by variance
+        top_growth = df.nlargest(10, 'Variance')
+        fig = px.bar(top_growth, x='Variance', y='Customer Name', 
+                    title="Top 10 Revenue Growth (Q3 to Q4)",
+                    orientation='h')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Data table with filters
+    st.subheader("Detailed Customer Analysis")
+    
+    # Filters
+    col1, col2 = st.columns(2)
+    with col1:
+        min_revenue = st.number_input("Min Q4 Revenue", value=0.0)
+    with col2:
+        growth_only = st.checkbox("Show only positive growth")
+    
+    filtered_df = df[df['Quarter 4 Revenue'] >= min_revenue]
+    if growth_only:
+        filtered_df = filtered_df[filtered_df['Variance'] > 0]
+    
+    st.dataframe(filtered_df, use_container_width=True)
+    
+    # Add AI Chatbot
+    st.markdown("---")
+    display_chatbot(data, view_title)
+
+def display_churn_analysis(df, data, view_title):
+    st.header(" Revenue Bridge & Churn Analysis")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        total_churned = df['Churned Revenue'].sum()
+        st.metric("Total Churned Revenue", f"${total_churned:,.2f}")
+        
+    with col2:
+        total_new = df['New Revenue'].sum()
+        st.metric("Total New Revenue", f"${total_new:,.2f}")
+        
+    with col3:
+        total_expansion = df['Expansion Revenue'].sum()
+        st.metric("Total Expansion Revenue", f"${total_expansion:,.2f}")
+    
+    # Revenue bridge waterfall chart
+    st.subheader("Revenue Bridge Analysis")
+    
+    revenue_categories = ['Sep Revenue', 'New Revenue', 'Expansion Revenue', 
+                         'Contraction Revenue', 'Churned Revenue', 'Oct Revenue']
+    
+    q3_total = df['Quarter 3 Revenue'].sum()
+    new_total = df['New Revenue'].sum()
+    expansion_total = df['Expansion Revenue'].sum()
+    contraction_total = -df['Contraction Revenue'].sum()
+    churned_total = -df['Churned Revenue'].sum()
+    q4_total = df['Quarter 4 Revenue'].sum()
+    
+    values = [q3_total, new_total, expansion_total, contraction_total, churned_total, q4_total]
+    
+    fig = go.Figure(go.Waterfall(
+        name="Revenue Bridge",
+        orientation="v",
+        measure=["absolute", "relative", "relative", "relative", "relative", "total"],
+        x=revenue_categories,
+        text=[f"${v:,.0f}" for v in values],
+        y=values,
+        connector={"line": {"color": "rgb(63, 63, 63)"}},
+    ))
+    
+    fig.update_layout(title="Revenue Bridge: September to October", showlegend=False)
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Detailed table
+    st.subheader("Customer-wise Revenue Bridge")
+    st.dataframe(df, use_container_width=True)
+    
+    # Add AI Chatbot
+    st.markdown("---")
+    display_chatbot(data, view_title)
+
+def display_country_analysis(df, data, view_title):
+    st.header(" Country-wise Revenue Analysis")
+    
+    # Remove null values and sort by revenue
+    df_clean = df[df['Yearly Revenue'].notna()].sort_values('Yearly Revenue', ascending=False)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Top Countries by Revenue")
+        top_10 = df_clean.head(10)
+        fig = px.bar(top_10, x='Yearly Revenue', y='Country',
+                    title="Top 10 Countries by Revenue",
+                    orientation='h')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        st.subheader("Revenue Distribution")
+        fig = px.pie(df_clean.head(8), values='Yearly Revenue', names='Country',
+                    title="Revenue Share by Country (Top 8)")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Key metrics
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        total_revenue = df_clean['Yearly Revenue'].sum()
+        st.metric("Total Global Revenue", f"${total_revenue:,.2f}")
+    with col2:
+        top_country = df_clean.iloc[0]
+        st.metric("Top Country", f"{top_country['Country']}")
+    with col3:
+        top_revenue = top_country['Yearly Revenue']
+        st.metric("Top Country Revenue", f"${top_revenue:,.2f}")
+    
+    # Full data table
+    st.subheader("All Countries")
+    st.dataframe(df_clean, use_container_width=True)
+    
+    # Add AI Chatbot
+    st.markdown("---")
+    display_chatbot(data, view_title)
+
+def display_customer_concentration_analysis(df, data, view_title):
+    st.header("Customer Concentration Analysis")
+    
+    # Sort by revenue descending
+    df_sorted = df.sort_values('Total Revenue', ascending=False)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Key Metrics")
+        total_revenue = df_sorted['Total Revenue'].sum()
+        top_customer = df_sorted.iloc[0]
+        top_5_revenue = df_sorted.head(5)['Total Revenue'].sum()
+        top_10_revenue = df_sorted.head(10)['Total Revenue'].sum()
+        
+        st.metric("Total Revenue", f"${total_revenue:,.2f}")
+        st.metric("Top Customer", top_customer['Customer Name'])
+        st.metric("Top Customer Revenue", f"${top_customer['Total Revenue']:,.2f}")
+        st.metric("Top 5 Customers %", f"{(top_5_revenue/total_revenue)*100:.1f}%")
+        st.metric("Top 10 Customers %", f"{(top_10_revenue/total_revenue)*100:.1f}%")
+    
+    with col2:
+        st.subheader("Top 10 Customers by Revenue")
+        top_10 = df_sorted.head(10)
+        fig = px.bar(top_10, x='Total Revenue', y='Customer Name',
+                    title="Top 10 Customers by Total Revenue",
+                    orientation='h')
+        fig.update_layout(yaxis={'categoryorder':'total ascending'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Revenue concentration analysis
+    st.subheader("Revenue Concentration Analysis")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Pareto chart
+        df_sorted_reset = df_sorted.reset_index(drop=True)
+        df_sorted_reset['Cumulative Revenue'] = df_sorted_reset['Total Revenue'].cumsum()
+        df_sorted_reset['Cumulative %'] = (df_sorted_reset['Cumulative Revenue'] / total_revenue) * 100
+        
+        # Show top 20 for better visualization
+        top_20 = df_sorted_reset.head(20)
+        
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=top_20.index + 1,
+            y=top_20['Total Revenue'],
+            name='Revenue',
+            yaxis='y'
+        ))
+        fig.add_trace(go.Scatter(
+            x=top_20.index + 1,
+            y=top_20['Cumulative %'],
+            mode='lines+markers',
+            name='Cumulative %',
+            yaxis='y2',
+            line=dict(color='red')
+        ))
+        
+        fig.update_layout(
+            title='Customer Revenue Pareto Analysis (Top 20)',
+            xaxis_title='Customer Rank',
+            yaxis=dict(title='Revenue ($)', side='left'),
+            yaxis2=dict(title='Cumulative %', side='right', overlaying='y'),
+            showlegend=True
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Revenue distribution pie chart
+        top_15 = df_sorted.head(15)
+        others_revenue = total_revenue - top_15['Total Revenue'].sum()
+        
+        # Create pie chart data
+        pie_data = top_15[['Customer Name', 'Total Revenue']].copy()
+        if others_revenue > 0:
+            pie_data = pd.concat([pie_data, pd.DataFrame({
+                'Customer Name': ['Others'],
+                'Total Revenue': [others_revenue]
+            })], ignore_index=True)
+        
+        fig = px.pie(pie_data, values='Total Revenue', names='Customer Name',
+                    title="Revenue Distribution (Top 15 + Others)")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Revenue tiers analysis
+    st.subheader("Customer Revenue Tiers")
+    
+    # Define revenue tiers
+    tier_1M = df_sorted[df_sorted['Total Revenue'] >= 1000000]
+    tier_500K = df_sorted[(df_sorted['Total Revenue'] >= 500000) & (df_sorted['Total Revenue'] < 1000000)]
+    tier_100K = df_sorted[(df_sorted['Total Revenue'] >= 100000) & (df_sorted['Total Revenue'] < 500000)]
+    tier_below_100K = df_sorted[df_sorted['Total Revenue'] < 100000]
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("$1M+ Customers", len(tier_1M))
+        st.metric("$1M+ Revenue", f"${tier_1M['Total Revenue'].sum():,.2f}")
+    
+    with col2:
+        st.metric("$500K-$1M Customers", len(tier_500K))
+        st.metric("$500K-$1M Revenue", f"${tier_500K['Total Revenue'].sum():,.2f}")
+    
+    with col3:
+        st.metric("$100K-$500K Customers", len(tier_100K))
+        st.metric("$100K-$500K Revenue", f"${tier_100K['Total Revenue'].sum():,.2f}")
+    
+    with col4:
+        st.metric("Below $100K Customers", len(tier_below_100K))
+        st.metric("Below $100K Revenue", f"${tier_below_100K['Total Revenue'].sum():,.2f}")
+    
+    # Search and filter functionality
+    st.subheader("Customer Search & Analysis")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        search_term = st.text_input("Search Customer Name:", "")
+        min_revenue_filter = st.number_input("Minimum Revenue Filter:", value=0.0, step=1000.0)
+    
+    with col2:
+        show_top_n = st.slider("Show Top N Customers:", min_value=10, max_value=100, value=50)
+    
+    # Apply filters
+    filtered_df = df_sorted.copy()
+    
+    if search_term:
+        filtered_df = filtered_df[filtered_df['Customer Name'].str.contains(search_term, case=False, na=False)]
+    
+    if min_revenue_filter > 0:
+        filtered_df = filtered_df[filtered_df['Total Revenue'] >= min_revenue_filter]
+    
+    filtered_df = filtered_df.head(show_top_n)
+    
+    st.dataframe(filtered_df, use_container_width=True)
+    
+    # Add AI Chatbot
+    st.markdown("---")
+    display_chatbot(data, view_title)
+
+def display_month_on_month_analysis(df, data, view_title):
+    st.header("Month-on-Month Revenue Analysis")
+    
+    # Convert Month to datetime
+    df['Month'] = pd.to_datetime(df['Month'])
+    df['Month_Label'] = df['Month'].dt.strftime('%b %Y')
+    df = df.sort_values('Month')
+    
+    # Key metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        total_revenue = df['Revenue'].sum()
+        st.metric("Total Revenue (2024)", f"${total_revenue:,.2f}")
+    
+    with col2:
+        avg_monthly = df['Revenue'].mean()
+        st.metric("Average Monthly Revenue", f"${avg_monthly:,.2f}")
+    
+    with col3:
+        max_month = df.loc[df['Revenue'].idxmax()]
+        st.metric("Best Month", max_month['Month_Label'])
+        st.metric("Best Month Revenue", f"${max_month['Revenue']:,.2f}")
+    
+    with col4:
+        latest_variance = df.iloc[-1]['Variance in %']
+        st.metric("Latest MoM Growth", f"{latest_variance:.2f}%")
+    
+    # Revenue trend chart
+    st.subheader("Monthly Revenue Trend")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        fig = px.line(df, x='Month_Label', y='Revenue', 
+                     title='Monthly Revenue Trend',
+                     markers=True)
+        fig.update_layout(xaxis_tickangle=-45)
+        fig.update_traces(line=dict(width=3), marker=dict(size=8))
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Month-over-Month variance chart
+        df_positive = df[df['Variance in %'] >= 0]
+        df_negative = df[df['Variance in %'] < 0]
+        
+        fig = go.Figure()
+        
+        if not df_positive.empty:
+            fig.add_trace(go.Bar(
+                x=df_positive['Month_Label'],
+                y=df_positive['Variance in %'],
+                name='Positive Growth',
+                marker_color='green',
+                text=[f"{x:.1f}%" for x in df_positive['Variance in %']],
+                textposition='outside'
+            ))
+        
+        if not df_negative.empty:
+            fig.add_trace(go.Bar(
+                x=df_negative['Month_Label'],
+                y=df_negative['Variance in %'],
+                name='Negative Growth',
+                marker_color='red',
+                text=[f"{x:.1f}%" for x in df_negative['Variance in %']],
+                textposition='outside'
+            ))
+        
+        fig.update_layout(
+            title='Month-over-Month Growth %',
+            xaxis_title='Month',
+            yaxis_title='Growth %',
+            xaxis_tickangle=-45,
+            showlegend=True
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Revenue variance analysis
+    st.subheader("Revenue Variance Analysis")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Variance amount chart
+        colors = ['green' if x >= 0 else 'red' for x in df['Variance in amount']]
+        fig = px.bar(df, x='Month_Label', y='Variance in amount',
+                    title='Monthly Revenue Variance (Amount)',
+                    color=df['Variance in amount'],
+                    color_continuous_scale=['red', 'green'])
+        fig.update_layout(xaxis_tickangle=-45)
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Growth phases analysis
+        growth_months = len(df[df['Variance in %'] > 0])
+        decline_months = len(df[df['Variance in %'] < 0])
+        stable_months = len(df[df['Variance in %'] == 0])
+        
+        phase_data = pd.DataFrame({
+            'Phase': ['Growth', 'Decline', 'Stable'],
+            'Months': [growth_months, decline_months, stable_months]
+        })
+        
+        fig = px.pie(phase_data, values='Months', names='Phase',
+                    title='Growth vs Decline Months',
+                    color_discrete_map={'Growth': 'green', 'Decline': 'red', 'Stable': 'blue'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Quarterly aggregation
+    st.subheader("Quarterly Performance Summary")
+    
+    df['Quarter'] = df['Month'].dt.to_period('Q')
+    quarterly_data = df.groupby('Quarter').agg({
+        'Revenue': 'sum',
+        'Variance in amount': 'sum'
+    }).reset_index()
+    quarterly_data['Quarter'] = quarterly_data['Quarter'].astype(str)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        fig = px.bar(quarterly_data, x='Quarter', y='Revenue',
+                    title='Quarterly Revenue Summary',
+                    text='Revenue')
+        fig.update_traces(texttemplate='$%{text:,.0f}', textposition='outside')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        st.subheader("Quarterly Metrics")
+        for _, row in quarterly_data.iterrows():
+            st.metric(
+                f"{row['Quarter']} Revenue", 
+                f"${row['Revenue']:,.2f}",
+                f"${row['Variance in amount']:,.2f}"
+            )
+    
+    # Growth insights
+    st.subheader("Growth Insights")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        best_growth_month = df.loc[df['Variance in %'].idxmax()]
+        st.info(f"**Best Growth Month:** {best_growth_month['Month_Label']} with {best_growth_month['Variance in %']:.2f}% growth")
+    
+    with col2:
+        worst_decline_month = df.loc[df['Variance in %'].idxmin()]
+        st.warning(f"**Worst Decline Month:** {worst_decline_month['Month_Label']} with {worst_decline_month['Variance in %']:.2f}% decline")
+    
+    with col3:
+        avg_growth_rate = df['Variance in %'].mean()
+        st.success(f"**Average MoM Growth:** {avg_growth_rate:.2f}%")
+    
+    # Detailed monthly table
+    st.subheader("Detailed Monthly Data")
+    
+    # Format the display dataframe
+    display_df = df[['Month_Label', 'Revenue', 'Variance in amount', 'Variance in %']].copy()
+    display_df.columns = ['Month', 'Revenue ($)', 'Variance Amount ($)', 'Variance (%)']
+    display_df['Revenue ($)'] = display_df['Revenue ($)'].apply(lambda x: f"${x:,.2f}")
+    display_df['Variance Amount ($)'] = display_df['Variance Amount ($)'].apply(lambda x: f"${x:,.2f}")
+    display_df['Variance (%)'] = display_df['Variance (%)'].apply(lambda x: f"{x:.2f}%")
+    
+    st.dataframe(display_df, use_container_width=True)
+    
+    # Add AI Chatbot
+    st.markdown("---")
+    display_chatbot(data, view_title)
+
 def json_serializer(obj):
     """Custom JSON serializer for datetime and other problematic objects"""
     if isinstance(obj, (datetime, pd.Timestamp)):
@@ -40,10 +558,632 @@ def safe_json_dumps(data):
 
 st.set_page_config(
     page_title="Revenue Analytics Dashboard",
-    page_icon="📊",
+    page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Modern Dark/Light Theme-Aware Styling
+st.markdown("""
+<style>
+    /* ===== THEME VARIABLES ===== */
+    :root {
+        /* Light theme colors */
+        --bg-primary: #ffffff;
+        --bg-secondary: #f8fafc;
+        --bg-tertiary: #f1f5f9;
+        --text-primary: #1e293b;
+        --text-secondary: #64748b;
+        --text-tertiary: #94a3b8;
+        --border-color: #e2e8f0;
+        --border-hover: #cbd5e1;
+        --accent-primary: #3b82f6;
+        --accent-hover: #2563eb;
+        --accent-light: rgba(59, 130, 246, 0.1);
+        --success: #10b981;
+        --success-bg: #ecfdf5;
+        --success-border: #a7f3d0;
+        --error: #ef4444;
+        --error-bg: #fef2f2;
+        --error-border: #fecaca;
+        --warning: #f59e0b;
+        --warning-bg: #fffbeb;
+        --warning-border: #fed7aa;
+        --info: #3b82f6;
+        --info-bg: #eff6ff;
+        --info-border: #bfdbfe;
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        --glass-bg: rgba(255, 255, 255, 0.7);
+        --glass-border: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Dark theme colors */
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --text-tertiary: #94a3b8;
+            --border-color: #334155;
+            --border-hover: #475569;
+            --accent-primary: #60a5fa;
+            --accent-hover: #3b82f6;
+            --accent-light: rgba(96, 165, 250, 0.1);
+            --success: #34d399;
+            --success-bg: rgba(16, 185, 129, 0.1);
+            --success-border: rgba(16, 185, 129, 0.3);
+            --error: #f87171;
+            --error-bg: rgba(239, 68, 68, 0.1);
+            --error-border: rgba(239, 68, 68, 0.3);
+            --warning: #fbbf24;
+            --warning-bg: rgba(245, 158, 11, 0.1);
+            --warning-border: rgba(245, 158, 11, 0.3);
+            --info: #60a5fa;
+            --info-bg: rgba(59, 130, 246, 0.1);
+            --info-border: rgba(59, 130, 246, 0.3);
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+            --glass-bg: rgba(30, 41, 59, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+    }
+
+    /* ===== GLOBAL STYLES ===== */
+    .main .block-container {
+        padding: 2rem 1rem;
+        max-width: 1200px;
+    }
+
+    /* Background gradient */
+    .stApp {
+        background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+        min-height: 100vh;
+    }
+
+    /* ===== TYPOGRAPHY ===== */
+    h1 {
+        color: var(--text-primary);
+        font-weight: 700;
+        font-size: 2.5rem;
+        margin-bottom: 2rem;
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        text-align: center;
+        position: relative;
+    }
+
+    h1::after {
+        content: '';
+        position: absolute;
+        bottom: -0.5rem;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 100px;
+        height: 3px;
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+        border-radius: 2px;
+    }
+
+    h2 {
+        color: var(--text-primary);
+        font-weight: 600;
+        font-size: 1.8rem;
+        margin: 2rem 0 1rem 0;
+        position: relative;
+        padding-left: 1rem;
+    }
+
+    h2::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 4px;
+        height: 2rem;
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+        border-radius: 2px;
+    }
+
+    h3 {
+        color: var(--text-secondary);
+        font-weight: 600;
+        font-size: 1.3rem;
+        margin-bottom: 1rem;
+    }
+
+    /* ===== MODERN BUTTON STYLING ===== */
+    .stButton > button {
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        font-size: 1rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: var(--shadow-md);
+        position: relative;
+        overflow: hidden;
+        min-height: 3rem;
+    }
+
+    .stButton > button::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+        transition: left 0.5s;
+    }
+
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+        background: linear-gradient(135deg, var(--accent-hover), var(--accent-primary));
+    }
+
+    .stButton > button:hover::before {
+        left: 100%;
+    }
+
+    .stButton > button:active {
+        transform: translateY(0);
+        box-shadow: var(--shadow-sm);
+    }
+
+    /* ===== CARD-BASED COMPONENTS ===== */
+    div[data-testid="metric-container"] {
+        background: var(--glass-bg);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: var(--shadow-md);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    div[data-testid="metric-container"]:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-lg);
+        border-color: var(--accent-light);
+    }
+
+    div[data-testid="metric-container"]::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+        border-radius: 16px 16px 0 0;
+    }
+
+    /* ===== MODERN TAB STYLING ===== */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+        background: var(--glass-bg);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 0.5rem;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        background: transparent;
+        border-radius: 12px;
+        color: var(--text-secondary);
+        font-weight: 500;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+
+    .stTabs [data-baseweb="tab"]:hover {
+        background: var(--accent-light);
+        color: var(--accent-primary);
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover)) !important;
+        color: white !important;
+        box-shadow: var(--shadow-md);
+        transform: translateY(-1px);
+    }
+
+    /* ===== INPUT FIELD STYLING ===== */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > div,
+    .stNumberInput > div > div > input {
+        background: var(--glass-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        color: var(--text-primary);
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+    }
+
+    .stTextInput > div > div > input:focus,
+    .stSelectbox > div > div > div:focus-within,
+    .stNumberInput > div > div > input:focus {
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 3px var(--accent-light);
+        outline: none;
+        transform: translateY(-1px);
+    }
+
+    /* ===== ALERT STYLING ===== */
+    .stSuccess,
+    .stError,
+    .stWarning,
+    .stInfo {
+        border-radius: 12px;
+        border: none;
+        padding: 1rem 1.5rem;
+        box-shadow: var(--shadow-sm);
+        backdrop-filter: blur(10px);
+        font-weight: 500;
+    }
+
+    .stSuccess {
+        background: var(--success-bg);
+        color: var(--success);
+        border-left: 4px solid var(--success);
+    }
+
+    .stError {
+        background: var(--error-bg);
+        color: var(--error);
+        border-left: 4px solid var(--error);
+    }
+
+    .stWarning {
+        background: var(--warning-bg);
+        color: var(--warning);
+        border-left: 4px solid var(--warning);
+    }
+
+    .stInfo {
+        background: var(--info-bg);
+        color: var(--info);
+        border-left: 4px solid var(--info);
+    }
+
+    /* ===== DATA VISUALIZATION ===== */
+    div[data-testid="stPlotlyChart"] {
+        background: var(--glass-bg);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: var(--shadow-md);
+        transition: all 0.3s ease;
+    }
+
+    div[data-testid="stPlotlyChart"]:hover {
+        box-shadow: var(--shadow-lg);
+        transform: translateY(-2px);
+    }
+
+    .stDataFrame {
+        background: var(--glass-bg);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: var(--shadow-md);
+    }
+
+    /* ===== FILE UPLOADER ===== */
+    .stFileUploader {
+        background: var(--glass-bg);
+        backdrop-filter: blur(10px);
+        border: 2px dashed var(--border-color);
+        border-radius: 16px;
+        padding: 3rem 2rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .stFileUploader:hover {
+        border-color: var(--accent-primary);
+        background: var(--accent-light);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+
+    /* ===== SIDEBAR STYLING ===== */
+    .css-1d391kg,
+    .css-1cypcdb {
+        background: var(--glass-bg) !important;
+        backdrop-filter: blur(10px);
+        border-right: 1px solid var(--glass-border);
+    }
+
+    /* ===== EXPANDER STYLING ===== */
+    .streamlit-expanderHeader {
+        background: var(--glass-bg);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--glass-border);
+        border-radius: 12px;
+        color: var(--text-primary);
+        font-weight: 600;
+    }
+
+    .streamlit-expanderContent {
+        background: var(--glass-bg);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--glass-border);
+        border-top: none;
+        border-radius: 0 0 12px 12px;
+    }
+
+    /* ===== ANIMATIONS ===== */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes pulse {
+        0%, 100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.8;
+        }
+    }
+
+    .main .block-container > div {
+        animation: fadeInUp 0.6s ease-out;
+    }
+
+    /* ===== LOADING ANIMATIONS ===== */
+    .stSpinner {
+        border-color: var(--accent-primary) !important;
+    }
+
+    /* ===== SCROLLBAR STYLING ===== */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: var(--bg-secondary);
+        border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: var(--accent-primary);
+        border-radius: 4px;
+        transition: background 0.3s ease;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--accent-hover);
+    }
+
+    /* ===== LOGIN/REGISTER SPECIAL STYLING ===== */
+    .login-container {
+        max-width: 400px;
+        margin: 2rem auto;
+        padding: 0;
+    }
+
+    .login-card {
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--glass-border);
+        border-radius: 24px;
+        padding: 2.5rem;
+        box-shadow: var(--shadow-lg);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .login-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+        border-radius: 24px 24px 0 0;
+    }
+
+    .login-title {
+        text-align: center;
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-size: 2.2rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        position: relative;
+    }
+
+    .login-subtitle {
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 1rem;
+        margin-bottom: 2rem;
+        font-weight: 400;
+    }
+
+    /* Enhanced input styling for login */
+    .login-input .stTextInput > div > div > input {
+        background: var(--glass-bg);
+        border: 2px solid var(--border-color);
+        border-radius: 16px;
+        padding: 1rem 1.25rem;
+        font-size: 1.1rem;
+        color: var(--text-primary);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        backdrop-filter: blur(10px);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .login-input .stTextInput > div > div > input:focus {
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 4px var(--accent-light), var(--shadow-md);
+        transform: translateY(-2px);
+        outline: none;
+    }
+
+    .login-input .stTextInput > div > div > input::placeholder {
+        color: var(--text-tertiary);
+        font-weight: 400;
+    }
+
+    /* Login button special styling */
+    .login-button .stButton > button {
+        width: 100%;
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+        border: none;
+        border-radius: 16px;
+        padding: 1rem 2rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: white;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: var(--shadow-md);
+        position: relative;
+        overflow: hidden;
+        margin-top: 1rem;
+        min-height: 3.5rem;
+    }
+
+    .login-button .stButton > button::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+        transition: left 0.6s;
+    }
+
+    .login-button .stButton > button:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-lg);
+        background: linear-gradient(135deg, var(--accent-hover), var(--accent-primary));
+    }
+
+    .login-button .stButton > button:hover::before {
+        left: 100%;
+    }
+
+    .login-button .stButton > button:active {
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-md);
+    }
+
+    /* Tab styling for login/register */
+    .login-tabs .stTabs [data-baseweb="tab-list"] {
+        background: var(--glass-bg);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--glass-border);
+        border-radius: 20px;
+        padding: 0.5rem;
+        margin-bottom: 2rem;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .login-tabs .stTabs [data-baseweb="tab"] {
+        background: transparent;
+        border-radius: 16px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        font-size: 1.1rem;
+        border: none;
+        padding: 1rem 2rem;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+
+    .login-tabs .stTabs [data-baseweb="tab"]:hover {
+        background: var(--accent-light);
+        color: var(--accent-primary);
+        transform: translateY(-1px);
+    }
+
+    .login-tabs .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover)) !important;
+        color: white !important;
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+    }
+
+    /* Selectbox styling for user type */
+    .login-input .stSelectbox > div > div > div {
+        background: var(--glass-bg);
+        border: 2px solid var(--border-color);
+        border-radius: 16px;
+        padding: 1rem 1.25rem;
+        color: var(--text-primary);
+        backdrop-filter: blur(10px);
+        box-shadow: var(--shadow-sm);
+        transition: all 0.3s ease;
+    }
+
+    .login-input .stSelectbox > div > div > div:focus-within {
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 4px var(--accent-light), var(--shadow-md);
+        transform: translateY(-2px);
+    }
+
+    /* Welcome message styling */
+    .welcome-message {
+        background: var(--glass-bg);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        text-align: center;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .welcome-message h3 {
+        color: var(--accent-primary);
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+    }
+
+    .welcome-message p {
+        color: var(--text-secondary);
+        margin: 0;
+        font-size: 1rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 class DatabaseManager:
     def __init__(self):
@@ -263,16 +1403,27 @@ class AuthManager:
         self.db = db_manager
     
     def login_page(self):
-        st.title("🔐 Revenue Analytics Platform")
+        # Center the login form with custom styling
+        st.markdown('<div class="login-container">', unsafe_allow_html=True)
+        st.markdown('<div class="login-card">', unsafe_allow_html=True)
         
-        tab1, tab2 = st.tabs(["Login", "Register"])
+        # Beautiful title and subtitle
+        st.markdown('<h1 class="login-title">Revenue Analytics</h1>', unsafe_allow_html=True)
+        st.markdown('<p class="login-subtitle">Professional Investment Dashboard</p>', unsafe_allow_html=True)
+        
+        # Custom styled tabs
+        st.markdown('<div class="login-tabs">', unsafe_allow_html=True)
+        tab1, tab2 = st.tabs(["Sign In", "Create Account"])
+        st.markdown('</div>', unsafe_allow_html=True)
         
         with tab1:
-            st.subheader("Login")
-            username = st.text_input("Username", key="login_username")
-            password = st.text_input("Password", type="password", key="login_password")
+            st.markdown('<div class="login-input">', unsafe_allow_html=True)
+            username = st.text_input("Username", placeholder="Enter your username", key="login_username")
+            password = st.text_input("Password", type="password", placeholder="Enter your password", key="login_password")
+            st.markdown('</div>', unsafe_allow_html=True)
             
-            if st.button("Login"):
+            st.markdown('<div class="login-button">', unsafe_allow_html=True)
+            if st.button("Sign In", use_container_width=True):
                 user = self.db.authenticate_user(username, password)
                 if user:
                     st.session_state.user_id = user[0]
@@ -280,26 +1431,48 @@ class AuthManager:
                     st.session_state.user_type = user[2]
                     st.session_state.company_name = user[3]
                     st.session_state.authenticated = True
-                    st.success("Login successful!")
+                    st.success("Welcome back! Redirecting to dashboard...")
                     st.rerun()
                 else:
-                    st.error("Invalid credentials")
+                    st.error("Invalid credentials. Please check your username and password.")
+            st.markdown('</div>', unsafe_allow_html=True)
         
         with tab2:
-            st.subheader("Register")
-            reg_username = st.text_input("Username", key="reg_username")
-            reg_password = st.text_input("Password", type="password", key="reg_password")
-            user_type = st.selectbox("User Type", ["investee", "investor"])
+            st.markdown('<div class="login-input">', unsafe_allow_html=True)
+            reg_username = st.text_input("Username", placeholder="Choose a username", key="reg_username")
+            reg_password = st.text_input("Password", type="password", placeholder="Create a secure password", key="reg_password")
+            user_type = st.selectbox("Account Type", ["investee", "investor"], 
+                                   format_func=lambda x: "Company (Upload Data)" if x == "investee" else "Investor (View Analytics)")
             
             company_name = None
             if user_type == "investee":
-                company_name = st.text_input("Company Name")
+                company_name = st.text_input("Company Name", placeholder="Enter your company name")
+            st.markdown('</div>', unsafe_allow_html=True)
             
-            if st.button("Register"):
-                if self.db.create_user(reg_username, reg_password, user_type, company_name):
-                    st.success("Registration successful! Please login.")
+            st.markdown('<div class="login-button">', unsafe_allow_html=True)
+            if st.button("Create Account", use_container_width=True):
+                if reg_username and reg_password:
+                    if user_type == "investee" and not company_name:
+                        st.error("Please enter your company name.")
+                    else:
+                        if self.db.create_user(reg_username, reg_password, user_type, company_name):
+                            st.success("Account created successfully! Please sign in with your new credentials.")
+                        else:
+                            st.error("Username already exists. Please choose a different username.")
                 else:
-                    st.error("Username already exists")
+                    st.error("Please fill in all required fields.")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Welcome message
+        st.markdown('''
+            <div class="welcome-message">
+                <h3>Welcome to Zenalyst.ai</h3>
+                <p>Advanced revenue analytics platform with AI-powered insights for modern businesses and investors.</p>
+            </div>
+        ''', unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)  # Close login-card
+        st.markdown('</div>', unsafe_allow_html=True)  # Close login-container
 
 class DashboardVisualizer:
     def __init__(self):
@@ -450,9 +1623,9 @@ def load_real_json_analyses():
         try:
             with open(filename, 'r', encoding='utf-8') as f:
                 analyses[key] = json.load(f)
-            st.success(f"✅ Loaded {filename}")
+            st.success(f"Successfully loaded {filename}")
         except Exception as e:
-            st.error(f"❌ Error loading {filename}: {str(e)}")
+            st.error(f"Error loading {filename}: {str(e)}")
             # Fallback to empty list if file can't be loaded
             analyses[key] = []
     
@@ -482,22 +1655,22 @@ Data Context:
 
 Provide a comprehensive executive summary analyzing customer growth patterns, revenue variance, and business performance:
 
-## 📈 Key Performance Insights
+## Key Performance Insights
 - Identify top 3 critical findings from customer revenue analysis with specific metrics
 - Calculate total revenue growth between Q3 and Q4 using actual numbers
 - Analyze customer segmentation by growth performance (high performers vs. declining customers)
 
-## 🎯 Growth Analysis & Trends  
+## Growth Analysis & Trends  
 - Highlight best performing customers with exact growth percentages and revenue figures
 - Identify customers with highest absolute revenue gains
 - Assess overall portfolio momentum and growth distribution patterns
 
-## ⚠️ Risk Assessment & Challenges
+## Risk Assessment & Challenges
 - Flag customers with significant revenue decline or negative variance
 - Identify volatility patterns and potential retention risks
 - Assess revenue concentration and customer dependency risks
 
-## 🚀 Strategic Recommendations
+## Strategic Recommendations
 - Prioritize customer expansion opportunities based on growth trends
 - Suggest retention strategies for declining accounts
 - Recommend revenue optimization tactics based on variance analysis""",
@@ -713,13 +1886,13 @@ def show_processing_animation():
     status_text = st.empty()
     
     processing_messages = [
-        "🔍 Analyzing revenue data...",
-        "📊 Processing financial metrics...", 
-        "🎯 Evaluating market position...",
-        "⚡ Running risk assessment...",
-        "🚀 Generating growth projections...",
-        "💡 Compiling investment insights...",
-        "✨ Finalizing analysis..."
+        "Analyzing revenue data...",
+        "Processing financial metrics...", 
+        "Evaluating market position...",
+        "Running risk assessment...",
+        "Generating growth projections...",
+        "Compiling investment insights...",
+        "Finalizing analysis..."
     ]
     
     for i in range(30):
@@ -732,7 +1905,7 @@ def show_processing_animation():
         
         time.sleep(1)
     
-    status_text.text("✅ Analysis complete!")
+    status_text.text("Analysis complete!")
     time.sleep(1)
 
 class OpenAIChatbot:
@@ -746,7 +1919,7 @@ class OpenAIChatbot:
     def get_response(self, user_question, tab_type, json_data, executive_summary):
         """Get context-aware response from OpenAI based on tab and full JSON data"""
         if not self.client:
-            return "⚠️ OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
+            return "OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
         
         # Create context-specific prompts for each tab with full JSON data
         context_prompts = {
@@ -807,9 +1980,44 @@ class OpenAIChatbot:
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
-            return f"⚠️ Error getting response: {str(e)}"
+            return f"Error getting response: {str(e)}"
 
 def create_beautiful_tab_layout(tab_name, json_data, tab_type):
+    """Create beautiful layout for each analysis tab with enhanced display functions"""
+    
+    # Convert JSON to DataFrame for the display functions
+    df = pd.DataFrame(json_data) if json_data else pd.DataFrame()
+    
+    # Generate AI-powered executive summary first
+    executive_summary = generate_ai_executive_summary(json_data, tab_type)
+    
+    # Call appropriate display function based on tab type
+    if tab_type == "quarterly" and not df.empty:
+        display_quarterly_analysis(df, json_data, "Quarterly Revenue")
+        
+    elif tab_type == "bridge" and not df.empty:
+        display_churn_analysis(df, json_data, "Revenue Bridge")
+        
+    elif tab_type == "geographic" and not df.empty:
+        display_country_analysis(df, json_data, "Country Analysis")
+        
+    elif tab_type == "customer" and not df.empty:
+        display_customer_concentration_analysis(df, json_data, "Customer Concentration")
+        
+    elif tab_type == "monthly" and not df.empty:
+        display_month_on_month_analysis(df, json_data, "Monthly Analysis")
+        
+    else:
+        # Fallback for empty data
+        st.header(f" {tab_name}")
+        st.warning("No data available for this analysis.")
+        
+        # Still show executive summary
+        st.markdown("---")
+        with st.expander(" Executive Summary", expanded=True):
+            st.markdown(executive_summary if executive_summary else "No summary available.")
+
+def create_beautiful_tab_layout_old(tab_name, json_data, tab_type):
     """Create beautiful layout for each analysis tab with charts and chatbot using real JSON data"""
     
     # Add custom CSS for better styling
@@ -844,11 +2052,11 @@ def create_beautiful_tab_layout(tab_name, json_data, tab_type):
     executive_summary = generate_ai_executive_summary(json_data, tab_type)
     
     # Header
-    st.header(f"📊 {tab_name}")
+    st.header(f"{tab_name}")
     
     # Data-specific visualizations based on real JSON structure (MOVED UP)
     if tab_type == "quarterly" and json_data:
-        st.markdown("### 🎯 Key Metrics")
+        st.markdown("### Key Metrics")
         
         # Calculate metrics from real data
         total_customers = len(json_data)
@@ -870,13 +2078,13 @@ def create_beautiful_tab_layout(tab_name, json_data, tab_type):
         top_performers = df.nlargest(10, 'Percentage of Variance')
         if not top_performers.empty:
             fig = px.bar(top_performers, x='Customer Name', y='Percentage of Variance',
-                        title="📈 Top 10 Customer Growth Performers (Q3 to Q4)",
+                        title="Top 10 Customer Growth Performers (Q3 to Q4)",
                         color='Percentage of Variance', color_continuous_scale='RdYlGn')
             fig.update_layout(height=400, xaxis_tickangle=-45)
             st.plotly_chart(fig, use_container_width=True)
     
     elif tab_type == "bridge" and json_data:
-        st.header("🔄 Revenue Bridge & Churn Analysis")
+        st.header("Revenue Bridge & Churn Analysis")
         
         # Convert to DataFrame for easier manipulation
         df = pd.DataFrame(json_data)
@@ -929,7 +2137,7 @@ def create_beautiful_tab_layout(tab_name, json_data, tab_type):
         st.dataframe(df, use_container_width=True)
     
     elif tab_type == "geographic" and json_data:
-        st.markdown("### 🎯 Key Metrics")
+        st.markdown("### Key Metrics")
         
         # Calculate geographic metrics
         total_countries = len(json_data)
@@ -953,18 +2161,18 @@ def create_beautiful_tab_layout(tab_name, json_data, tab_type):
         with col1:
             top_10 = df.nlargest(10, 'Yearly Revenue')
             fig = px.pie(top_10, values='Yearly Revenue', names='Country',
-                       title="🌍 Top 10 Countries by Revenue")
+                       title="Top 10 Countries by Revenue")
             st.plotly_chart(fig, use_container_width=True)
         
         with col2:
             fig = px.bar(top_10, x='Country', y='Yearly Revenue',
-                       title="📈 Revenue by Country (Top 10)",
+                       title="Revenue by Country (Top 10)",
                        color='Yearly Revenue', color_continuous_scale='Blues')
             fig.update_layout(xaxis_tickangle=-45)
             st.plotly_chart(fig, use_container_width=True)
     
     elif tab_type == "customer" and json_data:
-        st.markdown("### 🎯 Key Metrics")
+        st.markdown("### Key Metrics")
         
         # Customer analysis metrics (structure depends on actual JSON)
         total_customers = len(json_data)
@@ -980,7 +2188,7 @@ def create_beautiful_tab_layout(tab_name, json_data, tab_type):
             st.metric("Data Points", len(json_data))
     
     elif tab_type == "monthly" and json_data:
-        st.markdown("### 🎯 Key Metrics")
+        st.markdown("### Key Metrics")
         
         # Monthly analysis metrics (structure depends on actual JSON)
         total_months = len(json_data) if isinstance(json_data, list) else 12
@@ -997,12 +2205,12 @@ def create_beautiful_tab_layout(tab_name, json_data, tab_type):
     
     # Executive Summary Section (MOVED DOWN after charts)
     st.markdown("---")
-    with st.expander("📋 Executive Summary", expanded=True):
+    with st.expander("Executive Summary", expanded=True):
         st.markdown(executive_summary)
     
     # Enhanced chatbot interface with suggestion buttons
     st.markdown("---")
-    st.markdown("### 💬 AI Data Analyst")
+    st.markdown("### AI Data Analyst")
     st.markdown("Ask questions about the data, trends, insights, or get analysis recommendations.")
     
     # Initialize chatbot
@@ -1017,13 +2225,13 @@ def create_beautiful_tab_layout(tab_name, json_data, tab_type):
     # Quick suggestion buttons
     col1, col2, col3 = st.columns(3)
     with col1:
-        if st.button("📊 Key Insights", key=f"insights_{tab_type}"):
+        if st.button("Key Insights", key=f"insights_{tab_type}"):
             st.session_state[f"pending_question_{chat_key}"] = "What are the key insights from this data?"
     with col2:
-        if st.button("📈 Trends", key=f"trends_{tab_type}"):
+        if st.button("Trends", key=f"trends_{tab_type}"):
             st.session_state[f"pending_question_{chat_key}"] = "What trends can you identify in this data?"
     with col3:
-        if st.button("💡 Recommendations", key=f"recommendations_{tab_type}"):
+        if st.button("Recommendations", key=f"recommendations_{tab_type}"):
             st.session_state[f"pending_question_{chat_key}"] = "What recommendations do you have based on this analysis?"
     
     # Chat input
@@ -1042,7 +2250,7 @@ def create_beautiful_tab_layout(tab_name, json_data, tab_type):
         
         # Generate AI response
         try:
-            with st.spinner("🤖 Analyzing your data..."):
+            with st.spinner("Analyzing your data..."):
                 response = st.session_state[f"chatbot_{tab_type}"].get_response(
                     user_question, tab_type, json_data, executive_summary
                 )
@@ -1051,12 +2259,12 @@ def create_beautiful_tab_layout(tab_name, json_data, tab_type):
                 st.session_state[chat_key].append({"role": "assistant", "content": response})
                 
         except Exception as e:
-            error_msg = f"❌ Error: {str(e)}"
+            error_msg = f"Error: {str(e)}"
             st.session_state[chat_key].append({"role": "assistant", "content": error_msg})
     
     # Display chat history
     if st.session_state[chat_key]:
-        st.markdown("### 💬 Chat History")
+        st.markdown("### Chat History")
         for message in st.session_state[chat_key]:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
@@ -1070,7 +2278,7 @@ def show_beautiful_analysis_interface(db, company_id, company_name):
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<h1 style='text-align: center; color: #1f77b4;'> Zenalyst.ai</h1>", unsafe_allow_html=True)
-        st.markdown(f"<h3 style='text-align: center; color: #666;'>📊 {company_name} - Investment Analysis</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='text-align: center; color: #666;'>{company_name} - Investment Analysis</h3>", unsafe_allow_html=True)
     
     # Back button
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -1086,11 +2294,11 @@ def show_beautiful_analysis_interface(db, company_id, company_name):
     
     # Check if analysis is already completed
     if not hasattr(st.session_state, f'analysis_complete_{company_id}'):
-        st.info("🚀 Starting comprehensive LLM analysis of your investment data...")
+        st.info("Starting comprehensive analysis of your investment data...")
         
         # Show processing animation
         with st.container():
-            st.subheader("🔄 Processing Investment Analysis")
+            st.subheader("Processing Investment Analysis")
             show_processing_animation()
         
         # Mark analysis as complete and store results
@@ -1101,15 +2309,15 @@ def show_beautiful_analysis_interface(db, company_id, company_name):
     # Get analysis results
     analysis_results = st.session_state[f'analysis_results_{company_id}']
     
-    st.success("✅ Analysis Complete! Explore the detailed insights below:")
+    st.success("Analysis Complete! Explore the detailed insights below:")
     
     # Create beautiful tabs for the 5 analysis types
     tabs = st.tabs([
-        "📊 Quarterly Revenue",
-        "🌉 Revenue Bridge", 
-        "🌍 Geographic Analysis",
-        "👥 Customer Analysis",
-        "📈 Monthly Trends"
+        "Quarterly Revenue",
+        "Revenue Bridge", 
+        "Geographic Analysis",
+        "Customer Analysis",
+        "Monthly Trends"
     ])
     
     # Tab 1: Quarterly Revenue Analysis
@@ -1157,32 +2365,32 @@ def show_beautiful_analysis_interface(db, company_id, company_name):
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("📄 Generate Full Report", type="primary"):
+        if st.button("Generate Full Report", type="primary"):
             # Generate comprehensive PDF report
             pdf_data = generate_pdf_report(analysis_results, company_name)
             if pdf_data:
                 st.download_button(
-                    label="📥 Download PDF Report",
+                    label="Download PDF Report",
                     data=pdf_data,
                     file_name=f"{company_name}_Investment_Analysis_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf"
                 )
             else:
-                st.error("❌ Error generating PDF report")
+                st.error("Error generating PDF report")
     
     with col2:
-        if st.button("💾 Save Analysis"):
+        if st.button("Save Analysis"):
             # Generate analysis JSON export
             json_data = save_analysis_as_json(analysis_results, company_name)
             if json_data:
                 st.download_button(
-                    label="📥 Download Analysis Data",
+                    label="Download Analysis Data",
                     data=json_data,
                     file_name=f"{company_name}_Analysis_{datetime.now().strftime('%Y%m%d')}.json",
                     mime="application/json"
                 )
             else:
-                st.error("❌ Error generating analysis file")
+                st.error("Error generating analysis file")
 
 def generate_pdf_report(analysis_results, company_name):
     """Generate downloadable PDF report with all analysis"""
@@ -1335,7 +2543,7 @@ def main():
         investor_dashboard(db)
 
 def investee_dashboard(db):
-    st.title(f"📈 {st.session_state.company_name} - Data Management")
+    st.title(f"{st.session_state.company_name} - Data Management")
     
     company = db.get_company_by_investee(st.session_state.user_id)
     if not company:
@@ -1345,7 +2553,7 @@ def investee_dashboard(db):
     company_id = company[0]
     
     # Investor Connection Management
-    st.subheader("🤝 Investor Connections")
+    st.subheader("Investor Connections")
     
     # Get current investors
     current_investors = db.get_investors_for_company(company_id)
@@ -1356,7 +2564,7 @@ def investee_dashboard(db):
             with col1:
                 st.write(f"• {investor[1]}")
             with col2:
-                if st.button("❌", key=f"remove_investor_{investor[0]}_{company_id}", help="Remove this connection"):
+                if st.button("Remove", key=f"remove_investor_{investor[0]}_{company_id}", help="Remove this connection"):
                     if db.remove_investor_company_connection(investor[0], company_id):
                         st.success(f"Removed connection with {investor[1]}")
                         st.rerun()
@@ -1380,7 +2588,7 @@ def investee_dashboard(db):
         else:
             st.info("No investors available to connect with")
     
-    st.subheader("📊 Upload Revenue Data Files")
+    st.subheader("Upload Revenue Data Files")
     
     # File upload section
     uploaded_files = st.file_uploader(
@@ -1399,17 +2607,46 @@ def investee_dashboard(db):
                 excel_file = pd.ExcelFile(uploaded_file)
                 sheet_names = excel_file.sheet_names
                 
-                # Process each sheet
+                # Process each sheet with efficient header detection
                 for sheet_name in sheet_names:
-                    df = pd.read_excel(uploaded_file, sheet_name=sheet_name)
+                    # Read first few rows to detect headers efficiently
+                    sample_df = pd.read_excel(uploaded_file, sheet_name=sheet_name, nrows=5)
                     
-                    # Convert all datetime columns to strings BEFORE to_dict
+                    # Auto-detect header row (find first row with column names)
+                    header_row = 0
+                    for i in range(min(3, len(sample_df))):  # Check first 3 rows max
+                        test_row = sample_df.iloc[i]
+                        if test_row.notna().sum() > len(sample_df.columns) * 0.7:  # 70% non-null threshold
+                            header_row = i
+                            break
+                    
+                    # Read the full file with detected header
+                    df = pd.read_excel(uploaded_file, sheet_name=sheet_name, header=header_row)
+                    
+                    # Clean column names
+                    df.columns = df.columns.astype(str).str.strip()
+                    
+                    # Efficient data type conversion
                     for col in df.columns:
-                        if pd.api.types.is_datetime64_any_dtype(df[col]):
-                            df[col] = df[col].astype(str)
-                        elif df[col].dtype == 'object':
-                            if len(df) > 0 and isinstance(df[col].iloc[0], (pd.Timestamp, datetime)):
-                                df[col] = df[col].astype(str)
+                        col_dtype = df[col].dtype
+                        
+                        # Handle datetime columns efficiently
+                        if pd.api.types.is_datetime64_any_dtype(col_dtype):
+                            df[col] = df[col].dt.strftime('%Y-%m-%d %H:%M:%S').fillna('')
+                        elif col_dtype == 'object':
+                            # Check if column contains datetime strings
+                            if len(df) > 0:
+                                sample_values = df[col].dropna().head(3)
+                                if not sample_values.empty:
+                                    try:
+                                        pd.to_datetime(sample_values.iloc[0])
+                                        df[col] = pd.to_datetime(df[col], errors='coerce').dt.strftime('%Y-%m-%d %H:%M:%S').fillna('')
+                                    except:
+                                        # Keep as string
+                                        df[col] = df[col].astype(str).replace('nan', '')
+                        elif pd.api.types.is_numeric_dtype(col_dtype):
+                            # Handle numeric columns - ensure no inf values
+                            df[col] = df[col].replace([np.inf, -np.inf], None)
                     
                     # Replace NaN and NaT with None
                     df = df.replace({pd.NaT: None, np.nan: None})
@@ -1443,10 +2680,10 @@ def investee_dashboard(db):
                     
                     db.save_company_data(company_id, data_type, data)
                 
-                st.success(f"✅ {file_name} uploaded successfully!")
+                st.success(f"{file_name} uploaded successfully!")
                 
             except Exception as e:
-                st.error(f"❌ Error uploading {uploaded_file.name}: {str(e)}")
+                st.error(f"Error uploading {uploaded_file.name}: {str(e)}")
                 st.write(f"Error details: {type(e).__name__}: {str(e)}")
                 
                 # Additional debugging
@@ -1458,7 +2695,7 @@ def investee_dashboard(db):
                     st.error(f"Cannot read Excel file: {str(read_error)}")
     
     # Display current data
-    st.subheader("📈 Current Data Overview")
+    st.subheader("Current Data Overview")
     company_data = db.get_company_data(company_id)
     
     if company_data:
@@ -1473,10 +2710,10 @@ def investee_dashboard(db):
         st.info("No data uploaded yet. Please upload your Excel files above.")
 
 def investor_dashboard(db):
-    st.title("💼 Investor Portfolio Dashboard")
+    st.title("Investor Portfolio Dashboard")
     
     # Portfolio Management
-    st.subheader("🤝 Portfolio Management")
+    st.subheader("Portfolio Management")
     
     # Get current portfolio companies
     companies = db.get_companies_for_investor(st.session_state.user_id)
@@ -1518,7 +2755,7 @@ def investor_dashboard(db):
                     st.session_state.show_analysis = True
                     st.rerun()
             with col3:
-                if st.button("❌", key=f"remove_company_{comp[0]}_{st.session_state.user_id}", help="Remove from portfolio"):
+                if st.button("Remove", key=f"remove_company_{comp[0]}_{st.session_state.user_id}", help="Remove from portfolio"):
                     if db.remove_investor_company_connection(st.session_state.user_id, comp[0]):
                         st.success(f"Removed {comp[1]} from portfolio")
                         st.rerun()
@@ -1534,14 +2771,14 @@ def investor_dashboard(db):
         return
     
     # Company selection for regular analysis
-    st.subheader("📊 Company Analytics")
+    st.subheader("Company Analytics")
     company_options = {f"{comp[1]}": comp[0] for comp in companies}
     selected_company_name = st.selectbox("Select Company for Analysis", list(company_options.keys()))
     
     if selected_company_name:
         selected_company_id = company_options[selected_company_name]
         
-        st.subheader(f"📊 {selected_company_name} Analytics Dashboard")
+        st.subheader(f"{selected_company_name} Analytics Dashboard")
         
         # Get company data
         company_data = db.get_company_data(selected_company_id)
@@ -1568,13 +2805,13 @@ def investor_dashboard(db):
                 visualizer.create_quarterly_revenue_charts(data)
                 
                 # Chatbot
-                st.subheader("💬 Ask about Quarterly Revenue")
+                st.subheader("Ask about Quarterly Revenue")
                 chatbot = ChatBot(data, "Quarterly Revenue")
                 query = st.text_input("Ask a question about the quarterly revenue data:", 
                                     key="q1_chat")
                 if query:
                     response = chatbot.process_query(query)
-                    st.write("🤖 " + response)
+                    st.write("AI: " + response)
             else:
                 st.warning("Quarterly revenue data not available")
         
@@ -1587,13 +2824,13 @@ def investor_dashboard(db):
                 st.dataframe(df)
                 
                 # Chatbot
-                st.subheader("💬 Ask about Revenue Bridge")
+                st.subheader("Ask about Revenue Bridge")
                 chatbot = ChatBot(data, "Revenue Bridge")
                 query = st.text_input("Ask a question about the revenue bridge data:", 
                                     key="rb_chat")
                 if query:
                     response = chatbot.process_query(query)
-                    st.write("🤖 " + response)
+                    st.write("AI: " + response)
             else:
                 st.warning("Revenue bridge data not available")
         
@@ -1604,13 +2841,13 @@ def investor_dashboard(db):
                 visualizer.create_country_wise_charts(data)
                 
                 # Chatbot
-                st.subheader("💬 Ask about Country Analysis")
+                st.subheader("Ask about Country Analysis")
                 chatbot = ChatBot(data, "Country Analysis")
                 query = st.text_input("Ask a question about the country analysis data:", 
                                     key="country_chat")
                 if query:
                     response = chatbot.process_query(query)
-                    st.write("🤖 " + response)
+                    st.write("AI: " + response)
             else:
                 st.warning("Country analysis data not available")
         
@@ -1621,13 +2858,13 @@ def investor_dashboard(db):
                 visualizer.create_customer_concentration_charts(data)
                 
                 # Chatbot
-                st.subheader("💬 Ask about Customer Concentration")
+                st.subheader("Ask about Customer Concentration")
                 chatbot = ChatBot(data, "Customer Concentration")
                 query = st.text_input("Ask a question about customer concentration:", 
                                     key="cc_chat")
                 if query:
                     response = chatbot.process_query(query)
-                    st.write("🤖 " + response)
+                    st.write("AI: " + response)
             else:
                 st.warning("Customer concentration data not available")
         
@@ -1656,13 +2893,13 @@ def investor_dashboard(db):
                     st.dataframe(df)
                 
                 # Chatbot
-                st.subheader("💬 Ask about Monthly Trends")
+                st.subheader("Ask about Monthly Trends")
                 chatbot = ChatBot(data, "Monthly Revenue")
                 query = st.text_input("Ask a question about monthly trends:", 
                                     key="monthly_chat")
                 if query:
                     response = chatbot.process_query(query)
-                    st.write("🤖 " + response)
+                    st.write("AI: " + response)
             else:
                 st.warning("Monthly revenue data not available")
 
