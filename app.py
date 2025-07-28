@@ -92,9 +92,9 @@ def display_quarterly_analysis(df, data, view_title):
         total_q4 = df['Quarter 4 Revenue'].sum()
         total_variance = df['Variance'].sum()
         
-        st.metric("Total Q3 Revenue", f"${total_q3:,.2f}")
-        st.metric("Total Q4 Revenue", f"${total_q4:,.2f}")
-        st.metric("Total Variance", f"${total_variance:,.2f}")
+        st.metric("Total Q3 Revenue", f"${total_q3:,.0f}")
+        st.metric("Total Q4 Revenue", f"${total_q4:,.0f}")
+        st.metric("Total Variance", f"${total_variance:,.0f}")
     
     with col2:
         # Top performers by variance
@@ -131,15 +131,15 @@ def display_churn_analysis(df, data, view_title):
     
     with col1:
         total_churned = df['Churned Revenue'].sum()
-        st.metric("Total Churned Revenue", f"${total_churned:,.2f}")
+        st.metric("Total Churned Revenue", f"${total_churned:,.0f}")
         
     with col2:
         total_new = df['New Revenue'].sum()
-        st.metric("Total New Revenue", f"${total_new:,.2f}")
+        st.metric("Total New Revenue", f"${total_new:,.0f}")
         
     with col3:
         total_expansion = df['Expansion Revenue'].sum()
-        st.metric("Total Expansion Revenue", f"${total_expansion:,.2f}")
+        st.metric("Total Expansion Revenue", f"${total_expansion:,.0f}")
     
     # Revenue bridge waterfall chart
     st.subheader("Revenue Bridge Analysis")
@@ -203,13 +203,13 @@ def display_country_analysis(df, data, view_title):
     col1, col2, col3 = st.columns(3)
     with col1:
         total_revenue = df_clean['Yearly Revenue'].sum()
-        st.metric("Total Global Revenue", f"${total_revenue:,.2f}")
+        st.metric("Total Global Revenue", f"${total_revenue:,.0f}")
     with col2:
         top_country = df_clean.iloc[0]
         st.metric("Top Country", f"{top_country['Country']}")
     with col3:
         top_revenue = top_country['Yearly Revenue']
-        st.metric("Top Country Revenue", f"${top_revenue:,.2f}")
+        st.metric("Top Country Revenue", f"${top_revenue:,.0f}")
     
     # Full data table
     st.subheader("All Countries")
@@ -234,9 +234,9 @@ def display_customer_concentration_analysis(df, data, view_title):
         top_5_revenue = df_sorted.head(5)['Total Revenue'].sum()
         top_10_revenue = df_sorted.head(10)['Total Revenue'].sum()
         
-        st.metric("Total Revenue", f"${total_revenue:,.2f}")
+        st.metric("Total Revenue", f"${total_revenue:,.0f}")
         st.metric("Top Customer", top_customer['Customer Name'])
-        st.metric("Top Customer Revenue", f"${top_customer['Total Revenue']:,.2f}")
+        st.metric("Top Customer Revenue", f"${top_customer['Total Revenue']:,.0f}")
         st.metric("Top 5 Customers %", f"{(top_5_revenue/total_revenue)*100:.1f}%")
         st.metric("Top 10 Customers %", f"{(top_10_revenue/total_revenue)*100:.1f}%")
     
@@ -318,19 +318,19 @@ def display_customer_concentration_analysis(df, data, view_title):
     
     with col1:
         st.metric("$1M+ Customers", len(tier_1M))
-        st.metric("$1M+ Revenue", f"${tier_1M['Total Revenue'].sum():,.2f}")
+        st.metric("$1M+ Revenue", f"${tier_1M['Total Revenue'].sum():,.0f}")
     
     with col2:
         st.metric("$500K-$1M Customers", len(tier_500K))
-        st.metric("$500K-$1M Revenue", f"${tier_500K['Total Revenue'].sum():,.2f}")
+        st.metric("$500K-$1M Revenue", f"${tier_500K['Total Revenue'].sum():,.0f}")
     
     with col3:
         st.metric("$100K-$500K Customers", len(tier_100K))
-        st.metric("$100K-$500K Revenue", f"${tier_100K['Total Revenue'].sum():,.2f}")
+        st.metric("$100K-$500K Revenue", f"${tier_100K['Total Revenue'].sum():,.0f}")
     
     with col4:
         st.metric("Below $100K Customers", len(tier_below_100K))
-        st.metric("Below $100K Revenue", f"${tier_below_100K['Total Revenue'].sum():,.2f}")
+        st.metric("Below $100K Revenue", f"${tier_below_100K['Total Revenue'].sum():,.0f}")
     
     # Search and filter functionality
     st.subheader("Customer Search & Analysis")
@@ -373,20 +373,20 @@ def display_month_on_month_analysis(df, data, view_title):
     
     with col1:
         total_revenue = df['Revenue'].sum()
-        st.metric("Total Revenue (2024)", f"${total_revenue:,.2f}")
+        st.metric("Total Revenue (2024)", f"${total_revenue:,.0f}")
     
     with col2:
         avg_monthly = df['Revenue'].mean()
-        st.metric("Average Monthly Revenue", f"${avg_monthly:,.2f}")
+        st.metric("Average Monthly Revenue", f"${avg_monthly:,.0f}")
     
     with col3:
         max_month = df.loc[df['Revenue'].idxmax()]
         st.metric("Best Month", max_month['Month_Label'])
-        st.metric("Best Month Revenue", f"${max_month['Revenue']:,.2f}")
+        st.metric("Best Month Revenue", f"${max_month['Revenue']:,.0f}")
     
     with col4:
         latest_variance = df.iloc[-1]['Variance in %']
-        st.metric("Latest MoM Growth", f"{latest_variance:.2f}%")
+        st.metric("Latest MoM Growth", f"{latest_variance:.0f}%")
     
     # Revenue trend chart
     st.subheader("Monthly Revenue Trend")
@@ -492,8 +492,8 @@ def display_month_on_month_analysis(df, data, view_title):
         for _, row in quarterly_data.iterrows():
             st.metric(
                 f"{row['Quarter']} Revenue", 
-                f"${row['Revenue']:,.2f}",
-                f"${row['Variance in amount']:,.2f}"
+                f"${row['Revenue']:,.0f}",
+                f"${row['Variance in amount']:,.0f}"
             )
     
     # Growth insights
@@ -503,15 +503,15 @@ def display_month_on_month_analysis(df, data, view_title):
     
     with col1:
         best_growth_month = df.loc[df['Variance in %'].idxmax()]
-        st.info(f"**Best Growth Month:** {best_growth_month['Month_Label']} with {best_growth_month['Variance in %']:.2f}% growth")
+        st.info(f"**Best Growth Month:** {best_growth_month['Month_Label']} with {best_growth_month['Variance in %']:.0f}% growth")
     
     with col2:
         worst_decline_month = df.loc[df['Variance in %'].idxmin()]
-        st.warning(f"**Worst Decline Month:** {worst_decline_month['Month_Label']} with {worst_decline_month['Variance in %']:.2f}% decline")
+        st.warning(f"**Worst Decline Month:** {worst_decline_month['Month_Label']} with {worst_decline_month['Variance in %']:.0f}% decline")
     
     with col3:
         avg_growth_rate = df['Variance in %'].mean()
-        st.success(f"**Average MoM Growth:** {avg_growth_rate:.2f}%")
+        st.success(f"**Average MoM Growth:** {avg_growth_rate:.0f}%")
     
     # Detailed monthly table
     st.subheader("Detailed Monthly Data")
@@ -519,9 +519,9 @@ def display_month_on_month_analysis(df, data, view_title):
     # Format the display dataframe
     display_df = df[['Month_Label', 'Revenue', 'Variance in amount', 'Variance in %']].copy()
     display_df.columns = ['Month', 'Revenue ($)', 'Variance Amount ($)', 'Variance (%)']
-    display_df['Revenue ($)'] = display_df['Revenue ($)'].apply(lambda x: f"${x:,.2f}")
-    display_df['Variance Amount ($)'] = display_df['Variance Amount ($)'].apply(lambda x: f"${x:,.2f}")
-    display_df['Variance (%)'] = display_df['Variance (%)'].apply(lambda x: f"{x:.2f}%")
+    display_df['Revenue ($)'] = display_df['Revenue ($)'].apply(lambda x: f"${x:,.0f}")
+    display_df['Variance Amount ($)'] = display_df['Variance Amount ($)'].apply(lambda x: f"${x:,.0f}")
+    display_df['Variance (%)'] = display_df['Variance (%)'].apply(lambda x: f"{x:.0f}%")
     
     st.dataframe(display_df, use_container_width=True)
     
@@ -557,7 +557,7 @@ def safe_json_dumps(data):
         return json.dumps(data, default=fallback_serializer)
 
 st.set_page_config(
-    page_title="Revenue Analytics Dashboard",
+    page_title="Financial Analysis Dashboard",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -1403,76 +1403,78 @@ class AuthManager:
         self.db = db_manager
     
     def login_page(self):
-        # Center the login form with custom styling
-        st.markdown('<div class="login-container">', unsafe_allow_html=True)
-        st.markdown('<div class="login-card">', unsafe_allow_html=True)
-        
-        # Beautiful title and subtitle
-        st.markdown('<h1 class="login-title">Revenue Analytics</h1>', unsafe_allow_html=True)
-        st.markdown('<p class="login-subtitle">Professional Investment Dashboard</p>', unsafe_allow_html=True)
-        
-        # Custom styled tabs
-        st.markdown('<div class="login-tabs">', unsafe_allow_html=True)
-        tab1, tab2 = st.tabs(["Sign In", "Create Account"])
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        with tab1:
-            st.markdown('<div class="login-input">', unsafe_allow_html=True)
-            username = st.text_input("Username", placeholder="Enter your username", key="login_username")
-            password = st.text_input("Password", type="password", placeholder="Enter your password", key="login_password")
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            st.markdown('<div class="login-button">', unsafe_allow_html=True)
-            if st.button("Sign In", use_container_width=True):
-                user = self.db.authenticate_user(username, password)
-                if user:
-                    st.session_state.user_id = user[0]
-                    st.session_state.username = user[1]
-                    st.session_state.user_type = user[2]
-                    st.session_state.company_name = user[3]
-                    st.session_state.authenticated = True
-                    st.success("Welcome back! Redirecting to dashboard...")
-                    st.rerun()
-                else:
-                    st.error("Invalid credentials. Please check your username and password.")
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        with tab2:
-            st.markdown('<div class="login-input">', unsafe_allow_html=True)
-            reg_username = st.text_input("Username", placeholder="Choose a username", key="reg_username")
-            reg_password = st.text_input("Password", type="password", placeholder="Create a secure password", key="reg_password")
-            user_type = st.selectbox("Account Type", ["investee", "investor"], 
-                                   format_func=lambda x: "Company (Upload Data)" if x == "investee" else "Investor (View Analytics)")
-            
-            company_name = None
-            if user_type == "investee":
-                company_name = st.text_input("Company Name", placeholder="Enter your company name")
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            st.markdown('<div class="login-button">', unsafe_allow_html=True)
-            if st.button("Create Account", use_container_width=True):
-                if reg_username and reg_password:
-                    if user_type == "investee" and not company_name:
-                        st.error("Please enter your company name.")
-                    else:
-                        if self.db.create_user(reg_username, reg_password, user_type, company_name):
-                            st.success("Account created successfully! Please sign in with your new credentials.")
-                        else:
-                            st.error("Username already exists. Please choose a different username.")
-                else:
-                    st.error("Please fill in all required fields.")
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Welcome message
+        # Welcome message at the top
         st.markdown('''
             <div class="welcome-message">
                 <h3>Welcome to Zenalyst.ai</h3>
-                <p>Advanced revenue analytics platform with AI-powered insights for modern businesses and investors.</p>
             </div>
         ''', unsafe_allow_html=True)
         
-        st.markdown('</div>', unsafe_allow_html=True)  # Close login-card
-        st.markdown('</div>', unsafe_allow_html=True)  # Close login-container
+        # Create centered compact login form
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        with col2:
+            st.markdown('<div class="login-container">', unsafe_allow_html=True)
+            #st.markdown('<div class="login-card">', unsafe_allow_html=True)
+            
+            # Beautiful title and subtitle
+            st.markdown('<h1 class="login-title">Financial Analytics</h1>', unsafe_allow_html=True)
+            #st.markdown('<p class="login-subtitle">Professional Investment Dashboard</p>', unsafe_allow_html=True)
+            
+            # Custom styled tabs
+            st.markdown('<div class="login-tabs">', unsafe_allow_html=True)
+            tab1, tab2 = st.tabs(["Sign In", "Create Account"])
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            with tab1:
+                st.markdown('<div class="login-input">', unsafe_allow_html=True)
+                username = st.text_input("Username", placeholder="Enter your username", key="login_username")
+                password = st.text_input("Password", type="password", placeholder="Enter your password", key="login_password")
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                st.markdown('<div class="login-button">', unsafe_allow_html=True)
+                if st.button("Sign In", use_container_width=True):
+                    user = self.db.authenticate_user(username, password)
+                    if user:
+                        st.session_state.user_id = user[0]
+                        st.session_state.username = user[1]
+                        st.session_state.user_type = user[2]
+                        st.session_state.company_name = user[3]
+                        st.session_state.authenticated = True
+                        st.success("Welcome back! Redirecting to dashboard...")
+                        st.rerun()
+                    else:
+                        st.error("Invalid credentials. Please check your username and password.")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with tab2:
+                st.markdown('<div class="login-input">', unsafe_allow_html=True)
+                reg_username = st.text_input("Username", placeholder="Choose a username", key="reg_username")
+                reg_password = st.text_input("Password", type="password", placeholder="Create a secure password", key="reg_password")
+                user_type = st.selectbox("Account Type", ["investee", "investor"], 
+                                       format_func=lambda x: "Company (Upload Data)" if x == "investee" else "Investor (View Analytics)")
+                
+                company_name = None
+                if user_type == "investee":
+                    company_name = st.text_input("Company Name", placeholder="Enter your company name")
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                st.markdown('<div class="login-button">', unsafe_allow_html=True)
+                if st.button("Create Account", use_container_width=True):
+                    if reg_username and reg_password:
+                        if user_type == "investee" and not company_name:
+                            st.error("Please enter your company name.")
+                        else:
+                            if self.db.create_user(reg_username, reg_password, user_type, company_name):
+                                st.success("Account created successfully! Please sign in with your new credentials.")
+                            else:
+                                st.error("Username already exists. Please choose a different username.")
+                    else:
+                        st.error("Please fill in all required fields.")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)  # Close login-card
+            st.markdown('</div>', unsafe_allow_html=True)  # Close login-container
 
 class DashboardVisualizer:
     def __init__(self):
@@ -1582,7 +1584,7 @@ class ChatBot:
                 revenue_cols = [col for col in df.columns if 'revenue' in col.lower()]
                 if revenue_cols:
                     total = df[revenue_cols[0]].sum()
-                    return f"Total revenue is ${total:,.2f}"
+                    return f"Total revenue is ${total:,.0f}"
         
         elif "top" in query_lower or "best" in query_lower:
             if "customer" in query_lower or "client" in query_lower:
@@ -1590,14 +1592,14 @@ class ChatBot:
                 revenue_cols = [col for col in df.columns if 'revenue' in col.lower()]
                 if customer_cols and revenue_cols:
                     top_customer = df.loc[df[revenue_cols[0]].idxmax()]
-                    return f"Top customer is {top_customer[customer_cols[0]]} with ${top_customer[revenue_cols[0]]:,.2f}"
+                    return f"Top customer is {top_customer[customer_cols[0]]} with ${top_customer[revenue_cols[0]]:,.0f}"
         
         elif "average" in query_lower or "mean" in query_lower:
             if "revenue" in query_lower:
                 revenue_cols = [col for col in df.columns if 'revenue' in col.lower()]
                 if revenue_cols:
                     avg = df[revenue_cols[0]].mean()
-                    return f"Average revenue is ${avg:,.2f}"
+                    return f"Average revenue is ${avg:,.0f}"
         
         elif "count" in query_lower or "number" in query_lower:
             if "customer" in query_lower:
@@ -1833,7 +1835,7 @@ def generate_fallback_summary(json_data, analysis_type):
         ## Key Insights
         - {total_customers} customers analyzed for retention and expansion patterns
         - {expansion_customers} customers ({expansion_customers/total_customers*100:.1f}%) generated expansion revenue
-        - Total expansion revenue: ${total_expansion:,.2f}
+        - Total expansion revenue: ${total_expansion:,.0f}
         
         ## Performance Highlights
         - Customer retention showing healthy expansion patterns
@@ -1856,8 +1858,8 @@ def generate_fallback_summary(json_data, analysis_type):
         summary = f"""
         ## Key Insights
         - Revenue tracked across {total_countries} countries/regions
-        - Total annual revenue: ${total_revenue:,.2f}
-        - Top market: {top_countries[0]['Country']} (${top_countries[0].get('Yearly Revenue', 0):,.2f})
+        - Total annual revenue: ${total_revenue:,.0f}
+        - Top market: {top_countries[0]['Country']} (${top_countries[0].get('Yearly Revenue', 0):,.0f})
         
         ## Performance Highlights
         - Strong performance in India, Canada, and England markets
@@ -2093,15 +2095,15 @@ def create_beautiful_tab_layout_old(tab_name, json_data, tab_type):
         
         with col1:
             total_churned = df['Churned Revenue'].sum() if 'Churned Revenue' in df.columns else 0
-            st.metric("Total Churned Revenue", f"${total_churned:,.2f}")
+            st.metric("Total Churned Revenue", f"${total_churned:,.0f}")
             
         with col2:
             total_new = df['New Revenue'].sum() if 'New Revenue' in df.columns else 0
-            st.metric("Total New Revenue", f"${total_new:,.2f}")
+            st.metric("Total New Revenue", f"${total_new:,.0f}")
             
         with col3:
             total_expansion = df['Expansion Revenue'].sum() if 'Expansion Revenue' in df.columns else 0
-            st.metric("Total Expansion Revenue", f"${total_expansion:,.2f}")
+            st.metric("Total Expansion Revenue", f"${total_expansion:,.0f}")
         
         # Revenue bridge waterfall chart
         st.subheader("Revenue Bridge Analysis")
@@ -2442,7 +2444,7 @@ def generate_pdf_report(analysis_results, company_name):
                 elif tab_name == "Geographic Analysis":
                     total_countries = len(data)
                     total_revenue = sum(c.get('Yearly Revenue', 0) for c in data)
-                    summary_text = f"Revenue tracked across {total_countries} countries with total revenue of ${total_revenue:,.2f}"
+                    summary_text = f"Revenue tracked across {total_countries} countries with total revenue of ${total_revenue:,.0f}"
                 else:
                     summary_text = f"Comprehensive analysis of {len(data)} data points providing strategic insights"
                 
@@ -2711,6 +2713,31 @@ def investee_dashboard(db):
 
 def investor_dashboard(db):
     st.title("Investor Portfolio Dashboard")
+    
+    # Sidebar Navigation
+    with st.sidebar:
+        st.markdown("### Analysis Categories")
+        
+        # Create beautiful sidebar buttons
+        sidebar_buttons = [
+            "Company Overview",
+            "Captable",
+            "Organizational Structure",
+            "Revenue",
+            "Payroll",
+            "Sales and Marketing",
+            "Peer Analysis",
+            "Quality of Earnings",
+            "Working Capital",
+            "Red Flags"
+        ]
+        
+        for button_name in sidebar_buttons:
+            if st.button(button_name, key=f"sidebar_{button_name.lower().replace(' ', '_')}", 
+                        use_container_width=True):
+                st.info(f"{button_name} analysis coming soon!")
+        
+        st.markdown("---")
     
     # Portfolio Management
     st.subheader("Portfolio Management")
