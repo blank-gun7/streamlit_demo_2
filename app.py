@@ -36,12 +36,10 @@ def display_chatbot(data, view_title):
     ]
     
     st.markdown("**Quick Questions:**")
-    cols = st.columns(len(suggestions))
     for i, suggestion in enumerate(suggestions):
-        with cols[i]:
-            if st.button(suggestion[:15] + "...", key=f"suggest_{view_title}_{i}"):
-                st.session_state[f"pending_question_{chat_key}"] = suggestion
-                st.rerun()
+        if st.button(suggestion, key=f"suggest_{view_title}_{i}"):
+            st.session_state[f"pending_question_{chat_key}"] = suggestion
+            st.rerun()
     
     # Chat input
     user_question = st.chat_input(f"Ask about your {view_title} data...", key=f"chat_input_{view_title}")
