@@ -1779,7 +1779,7 @@ Create a professional executive summary with:
         prompt = prompts.get(analysis_type, f"Analyze this {analysis_type} data and provide business insights.")
         
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a world-class financial analyst and business intelligence expert with 15+ years of experience in revenue operations, customer analytics, and strategic business planning. Provide actionable insights with specific metrics and recommendations."},
                 {"role": "user", "content": prompt}
